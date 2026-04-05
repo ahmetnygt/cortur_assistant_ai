@@ -25,21 +25,22 @@ const tools = [
         type: "function",
         function: {
             name: "makeReservation",
-            description: "Müşteri belirli bir saati seçip rezervasyon yapmak istediğinde KESİNLİKLE bu fonksiyonu çağır. Öncesinde müşterinin adını öğren.",
+            description: "DİKKAT: Müşteri bir saati seçtiğinde ve sana AD, SOYAD, TELEFON bilgilerini verdiğinde KESİNLİKLE bu fonksiyonu çağır.",
             parameters: {
                 type: "object",
                 properties: {
-                    passengerName: { type: "string", description: "Yolcunun ad ve soyadı" },
-                    departureCity: { type: "string" },
-                    destinationCity: { type: "string" },
-                    date: { type: "string", description: "YYYY-MM-DD formatında tarih" },
-                    time: { type: "string", description: "Seçilen sefer saati, örn: 14:00" }
+                    sefer_id: {
+                        type: "string",
+                        description: "checkBusSchedule sonucunda saatin yanında yazan rakamlı ve tireli 'Sefer_ID' kodu (Örn: 62369-43-54). Birebir o kodu yaz, sakın başka kelime uydurma."
+                    },
+                    name: { type: "string", description: "Yolcunun adı" },
+                    surname: { type: "string", description: "Yolcunun soyadı" },
+                    phone: { type: "string", description: "Yolcunun telefon numarası" }
                 },
-                required: ["passengerName", "departureCity", "destinationCity", "date", "time"],
+                required: ["sefer_id", "name", "surname", "phone"],
             },
         },
-    }
-];
+    }];
 
 async function generateResponse(systemPrompt, userMessage, history = []) {
     try {
@@ -83,7 +84,6 @@ async function generateResponse(systemPrompt, userMessage, history = []) {
                 let functionResult = "";
 
                 // Bizim yazdığımız API servisini tetikliyoruz
-                // Bizim yazdığımız API servisini tetikliyoruz
                 if (functionName === "checkBusSchedule") {
                     functionResult = await checkBusSchedule(
                         functionArgs.departureCity,
@@ -92,11 +92,10 @@ async function generateResponse(systemPrompt, userMessage, history = []) {
                     );
                 } else if (functionName === "makeReservation") {
                     functionResult = await makeReservation(
-                        functionArgs.passengerName,
-                        functionArgs.departureCity,
-                        functionArgs.destinationCity,
-                        functionArgs.date,
-                        functionArgs.time
+                        functionArgs.sefer_id, // <-- BURAYI DEĞİŞTİRDİK
+                        functionArgs.name,
+                        functionArgs.surname,
+                        functionArgs.phone
                     );
                 }
 

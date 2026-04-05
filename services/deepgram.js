@@ -12,7 +12,8 @@ function startDeepgramService(tenantId, streamSid, onTranscript) {
         smart_format: true,
         encoding: "mulaw",
         sample_rate: 8000,
-        endpointing: 500
+        endpointing: 500, // <--- BURAYI 1000 YAPTIK (1 saniye sessizlik bekle)
+        interim_results: false
     });
 
     dgConnection.addListener(LiveTranscriptionEvents.Open, () => {
