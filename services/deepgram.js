@@ -12,7 +12,8 @@ function startDeepgramService(tenantId, streamSid, onTranscript) {
         smart_format: true,
         encoding: "mulaw",
         sample_rate: 8000,
-        endpointing: 1000,
+        // AHA BURASI: 1000 (1 saniye) olan bekleme süresini 3000 (3 saniye) yapıyoruz
+        endpointing: 3000,
         interim_results: false
     });
 

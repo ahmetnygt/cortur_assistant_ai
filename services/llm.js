@@ -23,10 +23,10 @@ const tools = [
         },
     },
     {
-        type: "function", // <-- İŞTE KAZARA SİLDİĞİMİZ SATIR BUYDU!
+        type: "function",
         function: {
             name: "makeReservation",
-            description: "YASAK: Müşteri kendi adını, soyadını, telefon numarasını ve T.C. Kimlik numarasını SÖYLEMEDEN bu aleti KESİNLİKLE ÇAĞIRMA.",
+            description: "Müşteri ad, soyad, telefon ve T.C. Kimlik numarasını eksiksiz verdiğinde, KESİNLİKLE MÜŞTERİDEN ONAY BEKLEMEDEN VE 'YAPIYORUM' DİYE CEVAP YAZMADAN DİREKT BU ALETİ ÇAĞIR! Aleti çağırmak için müşterinin 'tamam yap' demesini bekleme.",
             parameters: {
                 type: "object",
                 properties: {
