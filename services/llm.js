@@ -1,80 +1,85 @@
-const Groq = require("groq-sdk");
+const OpenAI = require("openai");
 const { checkBusSchedule, makeReservation } = require('./api');
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// OpenAI'ı fişe takıyoruz
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Buse'nin Alet Çantası (Yapay zekaya hangi fonksiyonları kullanabileceğini anlatıyoruz)
+// Buse'nin Alet Çantası (OpenAI Formatı)
 const tools = [
     {
         type: "function",
         function: {
             name: "checkBusSchedule",
-            description: "Müşteri sefer, bilet veya saat sorduğunda bu fonksiyonu çağır.",
+            description: "Müşteri İLK DEFA bir güzergah ve tarih sorduğunda bu fonksiyonu çağır. DİKKAT: Eğer geçmiş mesajlarda bu güzergah ve tarih için aleti zaten çağırdıysan TEKRAR ÇAĞIRMA! Geçmiş konuşmandaki verilere bakarak cevap ver.",
             parameters: {
                 type: "object",
                 properties: {
                     departureCity: { type: "string" },
                     destinationCity: { type: "string" },
-                    date: { type: "string" }
+                    date: { type: "string", description: "YYYY-MM-DD formatında tarih" }
                 },
                 required: ["departureCity", "destinationCity", "date"],
             },
         },
     },
     {
-        type: "function",
+        type: "function", // <-- İŞTE KAZARA SİLDİĞİMİZ SATIR BUYDU!
         function: {
             name: "makeReservation",
-            description: "DİKKAT: Müşteri bir saati seçtiğinde ve sana AD, SOYAD, TELEFON bilgilerini verdiğinde KESİNLİKLE bu fonksiyonu çağır.",
+            description: "YASAK: Müşteri kendi adını, soyadını, telefon numarasını ve T.C. Kimlik numarasını SÖYLEMEDEN bu aleti KESİNLİKLE ÇAĞIRMA.",
             parameters: {
                 type: "object",
                 properties: {
-                    sefer_id: {
-                        type: "string",
-                        description: "checkBusSchedule sonucunda saatin yanında yazan rakamlı ve tireli 'Sefer_ID' kodu (Örn: 62369-43-54). Birebir o kodu yaz, sakın başka kelime uydurma."
-                    },
+                    sefer_id: { type: "string" },
+                    koltuk_no: { type: "string" },
+                    fiyat: { type: "string" },
                     name: { type: "string", description: "Yolcunun adı" },
                     surname: { type: "string", description: "Yolcunun soyadı" },
-                    phone: { type: "string", description: "Yolcunun telefon numarası" }
+                    phone: { type: "string", description: "Yolcunun telefonu" },
+                    tc_kimlik: { type: "string", description: "Yolcunun 11 haneli T.C. Kimlik Numarası" } // <-- YENİ EKLENDİ
                 },
-                required: ["sefer_id", "name", "surname", "phone"],
+                required: ["sefer_id", "koltuk_no", "fiyat", "name", "surname", "phone", "tc_kimlik"], // <-- ZORUNLU KILINDI
             },
-        },
-    }];
+        }
+    }
+];
 
-async function generateResponse(systemPrompt, userMessage, history = []) {
+async function generateResponse(systemPrompt, userMessage, history = [], sessionState = {}) {
     try {
-        console.log(`[LLM] Groq is thinking...`);
+        console.log(`[LLM] GPT-4o-mini is thinking...`);
         const startTime = Date.now();
 
-        // LLM'in "Yarın" kelimesini anlaması için bugünün tarihini sisteme çakıyoruz
         const todayDate = new Date().toISOString().split('T')[0];
-        const dynamicPrompt = `${systemPrompt}\nÖNEMLİ BİLGİ: Bugünün tarihi ${todayDate}. Müşteri 'yarın' veya 'bugün' derse bu tarihi baz al. STT kaynaklı şive veya kelime hatalarını düzeltip bağlamı anla. Kısa ve net cevap ver.`;
+
+        // EĞER RAM'DE SEFER VARSA YAPAY ZEKAYI TEHDİT EDİYORUZ
+        let hafizaUyarisi = "";
+        if (sessionState.lastSchedules) {
+            hafizaUyarisi = `\n[SİSTEM EMRİ - ÇOK ÖNEMLİ]: Sen bu müşteri için zaten seferleri çektin! İşte bulduğun seferler: ${sessionState.lastSchedules}. SAKIN 'checkBusSchedule' ALETİNİ TEKRAR ÇAĞIRMA! Müşteri saat seçtiyse direkt ismini al ve rezervasyon yap.`;
+        }
+
+        // Dinamik prompta uyarımızı ekliyoruz
+        const dynamicPrompt = `${systemPrompt}\nÖNEMLİ BİLGİ: Bugünün tarihi ${todayDate}. ${hafizaUyarisi}`;
 
         const messages = [
             { role: "system", content: dynamicPrompt },
-            ...history, // index.js'den gelen geçmişi artık sisteme gömüyoruz
+            ...history,
             { role: "user", content: userMessage }
         ];
 
-        // 1. İSTEK: Groq'a soruyoruz: "Adamın lafına direkt cevap mı vereceksin, yoksa alet mi kullanacaksın?"
-        const response = await groq.chat.completions.create({
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            temperature: 0.2,
             messages: messages,
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.3, // Tool kullanırken halüsinasyon görmesin diye düşük
-            max_tokens: 250,
             tools: tools,
             tool_choice: "auto"
         });
 
         const responseMessage = response.choices[0].message;
 
-        // EĞER YAPAY ZEKA ALET KULLANMAYA KARAR VERDİYSE:
         if (responseMessage.tool_calls) {
-            console.log(`[LLM] Tool call detected! Buse alet çantasına sarıldı amk...`);
-            messages.push(responseMessage); // Asistanın bu hamlesini geçmişe ekliyoruz ki hafıza kaybolmasın
+            console.log(`[LLM] Tool call detected! Buse aleti eline aldı...`);
+            messages.push(responseMessage);
 
-            // Birden fazla fonksiyon çağırmak istediyse hepsini dönüyoruz
             for (const toolCall of responseMessage.tool_calls) {
                 const functionName = toolCall.function.name;
                 const functionArgs = JSON.parse(toolCall.function.arguments);
@@ -83,25 +88,31 @@ async function generateResponse(systemPrompt, userMessage, history = []) {
 
                 let functionResult = "";
 
-                // Bizim yazdığımız API servisini tetikliyoruz
                 if (functionName === "checkBusSchedule") {
                     functionResult = await checkBusSchedule(
                         functionArgs.departureCity,
                         functionArgs.destinationCity,
                         functionArgs.date
                     );
+
+                    // AHA BURASI: API'den gelen sonucu RAM'e (sessionState) çakıyoruz!
+                    sessionState.lastSchedules = functionResult;
+
                 } else if (functionName === "makeReservation") {
                     functionResult = await makeReservation(
-                        functionArgs.sefer_id, // <-- BURAYI DEĞİŞTİRDİK
+                        functionArgs.sefer_id,
+                        functionArgs.koltuk_no,
+                        functionArgs.fiyat,
                         functionArgs.name,
                         functionArgs.surname,
-                        functionArgs.phone
+                        functionArgs.phone,
+                        functionArgs.tc_kimlik // <-- YENİ EKLENDİ
                     );
                 }
 
                 console.log(`[LLM-TOOL] Result from API:`, functionResult);
 
-                // API'den gelen veriyi yapay zekaya "Al bakalım Buse, sonuç bu" diye geri besliyoruz
+                // API'den dönen veriyi OpenAI'a geri yediriyoruz
                 messages.push({
                     tool_call_id: toolCall.id,
                     role: "tool",
@@ -110,20 +121,21 @@ async function generateResponse(systemPrompt, userMessage, history = []) {
                 });
             }
 
-            // 2. İSTEK: API'nin sonucunu gören Llama'ya "Şimdi bu veriyi adama insan gibi oku" diyoruz
-            console.log(`[LLM] Asking Llama to summarize the API result for the user...`);
-            const secondResponse = await groq.chat.completions.create({
-                messages: messages,
-                model: "llama-3.3-70b-versatile",
-                temperature: 0.2, // AHA BURASI AMK. Kızı sınırlandırdık ki veriyi okurken destan yazmasın, halüsinasyon görmesin.
-                max_tokens: 250
+            // AHA RÖNTGEN CİHAZINI BURAYA TAKTIK: Buse'nin beynine tam olarak ne girdiğini ekrana kusuyoruz
+            console.log(`\n🧠 [BUSE'NİN BEYNİNE GİREN HAM DATA]:\n--------------------------------------------------\n${messages[messages.length - 1].content}\n--------------------------------------------------\n`);
+
+            // 2. İSTEK: API sonucunu gören OpenAI'a "Bunu adama düzgünce oku" diyoruz
+            console.log(`[LLM] Asking GPT to summarize the API result...`);
+            const secondResponse = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                temperature: 0.2,
+                messages: messages
             });
 
             console.log(`[LLM] Final tool-based response generated in ${Date.now() - startTime}ms.`);
             return secondResponse.choices[0].message.content;
         }
 
-        // Eğer alet kullanmadıysa (mesela adam sadece "Selam" dediyse) direkt cevabı dön
         console.log(`[LLM] Standard response generated in ${Date.now() - startTime}ms.`);
         return responseMessage.content;
 

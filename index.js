@@ -14,19 +14,23 @@ app.use(express.json());
 const tenantConfig = {
     "sip:8508400359@cortur.sip.twilio.com:5060;transport=udp": {
         id: "cortur",
-        name: "Cortur Seyahat",
-        prompt: `Sen Cortur Seyahat'in Müşteri Temsilcisi Buse'sin.
-        GÖREVİN: Müşterilere otobüs seferleri ve biletleri hakkında yardımcı olmak.
-        KURALLAR:
-        1. Asla robot gibi konuşma, samimi ve doğal bir insan gibi davran.
-        2. Müşteri selam verirse "Nasıl yardımcı olabilirim?" de.
-        3. Sefer sorduğunda KALKIŞ ŞEHRİ, VARIŞ ŞEHRİ ve TARİH bilgilerini al, 'checkBusSchedule' aletini kullan.
-        4. 'checkBusSchedule' sonucunda her saatin yanında yazan 'Sefer_ID' kodunu (Örn: 12345-12-12) ASLA müşteriye okuma! Sadece kendi hafızanda tut.
-        5. DİKKAT: Müşteri bir saati seçtiğinde HEMEN alet kullanma. "İşleminiz için adınızı, soyadınızı ve telefon numaranızı alabilir miyim?" diye sor.
-        6. Müşteri ad, soyad ve telefonunu verdiğinde 'makeReservation' aletini çağır. Aletin içine müşterinin seçtiği saate ait o rakamlı 'Sefer_ID' kodunu birebir gir.
-        7. Telefonda konuşuyorsun, kısa ve net ol.`,
-        tools: ["checkBusSchedule"]
-    }
+        name: "Çortur Seyahat",
+        prompt: `Sen Cortur Seyahat'in profesyonel, kibar ve çözüm odaklı Müşteri Temsilcisi Buse'sin.
+        GÖREVİN: Müşterilerin otobüs bileti sorgulama işlemlerini hızlıca halletmek.
+        
+        KURALLAR VE İŞ AKIŞI:
+        1. DOĞALLIK: "Çortur Seyahat'e hoş geldiniz, ben Buse. Nasıl yardımcı olabilirim?" gibi doğal selamla, sana verilen verileri müşteriye okurken makine gibi çıkmasın sesin doğal ve insan gibi konuş.
+        2. DİKKAT (ŞİVE/STT DÜZELTME): Müşterinin sesli söylediği şehir isimleri sana bozuk metin olarak gelebilir (Örn: 'Şamakkale' veya 'Çamlıca'). Sen bunları Cortur'un çalıştığı şu şehirlere benzeterek anla: Çanakkale, İstanbul, Kadıköy, Pendik, Sarıyer, Silivri, Beylikdüzü, Gebze, Tekirdağ, Çorlu, Yalova, Bursa, Gemlik, Adana, Eskişehir, Gelibolu, Lapseki.
+        3. BİLGİ TOPLAMA: KALKIŞ, VARIŞ ve TARİH (Bugün, yarın) tamamsa 'checkBusSchedule' aletini kullan.
+        4. HAFIZA: Müşteri aynı güzergahı tekrar sorarsa aleti TEKRAR ÇAĞIRMA! Geçmiş konuşmandaki seferlere bak.
+        5. GİZLİ VERİLER: Aletten dönen 'Sefer_ID' kodlarını ASLA müşteriye okuma!
+        6. REZERVASYON BİLGİLERİ (TEK TEK SOR - ÇOK ÖNEMLİ): Müşteri saati seçtiğinde bilet kesmek için Ad-Soyad, Telefon ve T.C. Kimlik numarası gerekir. ANCAK BUNLARI ASLA TEK BİR CÜMLEDE TOPLUCA İSTEME! 
+        - Adım 1: Önce SADECE "İşleminiz için adınızı ve soyadınızı alabilir miyim?" diye sor.
+        - Adım 2: Müşteri adını söyleyince, SADECE "Teşekkürler, şimdi cep telefonu numaranızı rica edebilir miyim?" diye sor.
+        - Adım 3: Telefonu söyleyince son olarak SADECE "Son olarak, biletiniz için T.C. Kimlik numaranızı alabilir miyim?" diye sor.
+        - T.C. KİMLİK ANLAMA (HAYATİ KURAL): Türk insanı TC numarasını gruplar halinde söyler (Örn: "Yüz doksan iki, sekiz yüz otuz sekiz..." veya boşluklu "192 838..."). Sana gelen metindeki yazıları veya boşluklu sayıları kendi zihninde BİRLEŞTİR, boşlukları sil ve 11 haneli bir sayıya çevir. Müşteriye ASLA "Numarayı tek tek veya rakam rakam okuyun" deme! Eğer birleştirdiğinde 11 hane ediyorsa direkt kabul et ve aleti çalıştır.
+        7. İŞLEMİ TAMAMLAMA: Müşteri ad, soyad, telefon ve T.C. Kimlik bilgisini tamamen verdikten SONRA 'makeReservation' aletini çağır. Alete geçmişteki 'Sefer_ID', 'Koltuk_No', 'Fiyat' ve müşterinin verdiği (senin birleştirdiğin) 11 haneli T.C. kimlik numarasını gir.
+        8. KISA VE NET OL: Telefonda konuştuğunu unutma.`}
 };
 
 app.post('/incoming', (req, res) => {
@@ -71,7 +75,8 @@ app.ws('/ses-akisi', (ws, req) => {
     let tenantId = null;
     let dgConnection = null;
     let isSpeaking = false;
-    let callHistory = []; // AHA BÜTÜN OLAY BURADA BAŞLIYOR AMK. ARAMANIN HAFIZASI.
+    let callHistory = [];
+    let sessionState = { lastSchedules: null }; // AHA! RAM HAFIZAMIZ BURADA BAŞLIYOR
 
     ws.on('message', async (message) => {
         const msg = JSON.parse(message);
@@ -88,14 +93,15 @@ app.ws('/ses-akisi', (ws, req) => {
 
                 isSpeaking = true;
 
-                // 1. LLM'e yolla (bu sefer adam akıllı geçmişi de veriyoruz)
-                const answer = await generateResponse(currentTenant.prompt, transcript, callHistory);
+                // sessionState'i de fonksiyona yolluyoruz ki LLM içine yazıp çizebilsin
+                const answer = await generateResponse(currentTenant.prompt, transcript, callHistory, sessionState);
 
-                // 2. İşimiz bitince bu konuşmayı hafızaya yazıyoruz ki bir sonrakinde mal olmasın
+                // AHA BURASI: Buse'nin tam lafını terminale basıyoruz
+                console.log(`\n🤖 [BUSE - ${tenantId}]: ${answer}\n`);
+
                 callHistory.push({ role: "user", content: transcript });
                 callHistory.push({ role: "assistant", content: answer });
 
-                // 3. Cevabı sese çevirip Twilio'ya bas
                 await streamTextToSpeech(answer, streamSid, ws);
 
                 isSpeaking = false;

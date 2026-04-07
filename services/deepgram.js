@@ -12,7 +12,7 @@ function startDeepgramService(tenantId, streamSid, onTranscript) {
         smart_format: true,
         encoding: "mulaw",
         sample_rate: 8000,
-        endpointing: 750,
+        endpointing: 1000,
         interim_results: false
     });
 

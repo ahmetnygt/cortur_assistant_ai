@@ -1,4 +1,4 @@
-const VOICE_ID = process.env.VOICE_ID || "tpxBtwei8XlHToJWrgAz";
+const VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
 const API_KEY = process.env.ELEVENLABS_API_KEY;
 
 /**
@@ -25,8 +25,8 @@ async function streamTextToSpeech(text, streamSid, twilioWs) {
                 text: text,
                 model_id: "eleven_turbo_v2_5", // Düşük gecikmeli çoklu dil destekli turbo model
                 voice_settings: {
-                    stability: 0.5,
-                    similarity_boost: 0.5
+                    stability: 0.45,
+                    similarity_boost: 0.75
                 }
             })
         });
