@@ -168,7 +168,7 @@ async function checkBusSchedule(departureCity, destinationCity, date) {
                 return `Maalesef ${date} tarihinde uygun boş koltuk kalmamıştır.`;
             }
 
-            return `Şu seferleri buldum: ${seferDetaylari.join(" | ")}. Müşteriye SAAT ve FİYATLARI oku, ama 'Sefer_ID' ve 'Koltuk_No' değerlerini KESİNLİKLE müşteriye SÖYLEME! Hafızanda tut.`;
+            return `Şu seferleri buldum: ${seferDetaylari.join(" | ")}. Müşteriye SADECE SAATLERİ oku (Fiyatı müşteri özel olarak sormadıkça ASLA söyleme). 'Sefer_ID' ve 'Koltuk_No' değerlerini KESİNLİKLE müşteriye SÖYLEME! Hafızanda tut. Robot gibi liste yapma, insanı günlük konuşma dili kullan.`;
         } else {
             return `Maalesef ${date} tarihinde bu güzergah için boş seferimiz yok.`;
         }

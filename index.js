@@ -123,26 +123,25 @@ app.ws('/ses-akisi', (ws, req) => {
                 isSpeaking = false;
             });
 
-            // AHA BURASI: Buse'nin telefonu açar açmaz konuşmasını sağlayan tetikleyici
+            // AHA BURASI: Buse'nin telefonu açar açmaz sabit metinle konuşmasını sağlayan tetikleyici
             setTimeout(async () => {
                 if (isSpeaking) return;
                 isSpeaking = true;
 
-                console.log(`\n🤖 [SİSTEM]: Telefon açıldı, Buse ilk selamlamayı yapıyor...`);
+                console.log(`\n🤖 [SİSTEM]: Telefon açıldı, Buse sabit ilk selamlamayı yapıyor...`);
 
-                // Buse'nin beynine gizli bir "Alo" yolluyoruz ki prompt'taki 1. kuralı (hoş geldiniz) çalıştırsın
-                const ilkMesaj = "Alo";
-                const answer = await generateResponse(currentTenant.prompt, ilkMesaj, callHistory, sessionState);
+                // LLM'i hiç yormadan sabit cümleyi yapıştırıyoruz
+                const sabitSelamlama = "Çortur Seyahat'e hoş geldiniz, ben Buse. Size nasıl yardımcı olabilirim?";
 
-                console.log(`\n🤖 [BUSE - ${tenantId}]: ${answer}\n`);
+                console.log(`\n🤖 [BUSE - ${tenantId} (SABİT)]: ${sabitSelamlama}\n`);
 
-                // İlk konuşmayı da hafızaya ekliyoruz ki Buse kendi dediğini unutmasın
-                callHistory.push({ role: "user", content: ilkMesaj });
-                callHistory.push({ role: "assistant", content: answer });
+                // Buse'nin kendi söylediğini bilmesi için sadece asistan mesajını hafızaya atıyoruz (Sahte 'Alo'ya gerek kalmadı)
+                callHistory.push({ role: "assistant", content: sabitSelamlama });
 
-                await streamTextToSpeech(answer, streamSid, ws);
+                // Doğrudan TTS'e (ElevenLabs'e) basıyoruz
+                await streamTextToSpeech(sabitSelamlama, streamSid, ws);
                 isSpeaking = false;
-            }, 600); // Bağlantının tam oturması için 600 milisaniye avans veriyoruz
+            }, 0); // Bağlantının tam oturması için 600 milisaniye avans
         }
 
         if (msg.event === 'media') {
