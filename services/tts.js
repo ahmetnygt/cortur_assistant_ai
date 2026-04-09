@@ -36,17 +36,14 @@ async function streamTextToSpeech(text, streamSid, twilioWs) {
         // Node 18+ ile gelen ReadableStream üzerinden veriyi parça parça okuyup anında basıyoruz
         if (response.body) {
             for await (const chunk of response.body) {
+                // AHA BURASI: Eğer iptal sinyali geldiyse akışı anında kes!
+                if (signal && signal.aborted) {
+                    console.log("🛑 [TTS] Müşteri araya girdi, ElevenLabs şelalesi kapatıldı.");
+                    break;
+                }
+
                 const base64Audio = Buffer.from(chunk).toString('base64');
-
-                const mediaMessage = {
-                    event: 'media',
-                    streamSid: streamSid,
-                    media: {
-                        payload: base64Audio
-                    }
-                };
-
-                // Paketi bekletmeden canlı hatta fırlat
+                const mediaMessage = { event: 'media', streamSid: streamSid, media: { payload: base64Audio } };
                 twilioWs.send(JSON.stringify(mediaMessage));
             }
             console.log(`[TTS] Ses akışı tamamlandı.`);

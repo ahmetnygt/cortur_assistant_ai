@@ -52,7 +52,7 @@ function startDeepgramService(tenantId, streamSid, onTranscript, onSpeech) {
                         console.log(`\n🗣️ [CUSTOMER - ${tenantId}]: ${finalMessage}`);
                         if (onTranscript) onTranscript(finalMessage);
                     }
-                }, 2500);
+                }, 800);
             }
         }
     });
