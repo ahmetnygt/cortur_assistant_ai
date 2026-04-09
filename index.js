@@ -33,14 +33,11 @@ Aşağıdaki adımları sırayla, her mesajda yalnızca bir adım ilerleyerek uy
 
 [ADIM 2: BİLGİ TOPLAMA]
 Müşteri seferi seçtiğinde, bilet kesmek için gereken bilgileri TEK TEK sor.
-1. Sadece "İşleminiz için adınızı ve soyadınızı alabilir miyim?" de ve bekle. (İsminden cinsiyetini anladıysan sormadan kaydet, eğer 'Deniz' gibi üniseks bir isimse "Yolcu beyefendi mi, hanımefendi mi?" diye teyit et).
+1. Sadece "İşleminiz için adınızı ve soyadınızı alabilir miyim?" de ve bekle. (MÜŞTERİYE ASLA CİNSİYETİNİ SORMA! İsminden %100 kendin tahmin et. Örneğin 'Ceren' kadındır, 'Ahmet' erkektir. Üniseks bile olsa birini seç ama sorma).
 2. Ad soyad gelince, sadece "Teşekkürler, cep telefonu numaranızı rica edebilir miyim?" de ve bekle.
 
 [ADIM 3: REZERVASYONU TAMAMLAMA]
-Müşteri Ad, Soyad, Telefon ve CİNSİYET bilgisini eksiksiz verdiği an, "İşleminizi yapıyorum, lütfen bekleyin" gibi hiçbir laf kalabalığı yapmadan DOĞRUDAN 'makeReservation' aracını çalıştır.
-
-[ADIM 3: REZERVASYONU TAMAMLAMA]
-Müşteri Ad, Soyad ve Telefon bilgisini eksiksiz verdiği an, "İşleminizi yapıyorum, lütfen bekleyin" gibi hiçbir laf kalabalığı yapmadan DOĞRUDAN 'makeReservation' aracını çalıştır.`}
+Müşteri Telefon numarasını söylediği AN işlemi bitir. Müşteriye "İşleminizi yapıyorum", "Lütfen bekleyin" gibi SÖZLÜ HİÇBİR CEVAP VERMEDEN, tamamen SESSİZCE doğrudan 'makeReservation' aracını (tool) çalıştır!`}
 };
 
 app.post('/incoming', (req, res) => {

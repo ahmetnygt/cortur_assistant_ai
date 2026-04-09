@@ -26,7 +26,7 @@ const tools = [
         type: "function",
         function: {
             name: "makeReservation",
-            description: "Müşteri ad, soyad ve telefon numarasını eksiksiz verdiğinde, KESİNLİKLE MÜŞTERİDEN ONAY BEKLEMEDEN VE 'YAPIYORUM' DİYE CEVAP YAZMADAN DİREKT BU ALETİ ÇAĞIR! Aleti çağırmak için müşterinin 'tamam yap' demesini bekleme.",
+            description: "Müşteri AD, SOYAD ve TELEFON numarasını verdiği AN bu aracı ÇAĞIR! 'cinsiyet' parametresini müşterinin isminden KENDİN TAHMİN EDEREK (Erkekse 'E', Kadınsa 'K') doldur. Aracı çağırırken müşteriye ASLA 'işlemi yapıyorum' diye yazılı/sözlü bir cevap verme, direkt aracı tetikle.",
             parameters: {
                 type: "object",
                 properties: {
@@ -54,7 +54,7 @@ async function generateResponse(systemPrompt, userMessage, history = [], session
         // EĞER RAM'DE SEFER VARSA YAPAY ZEKAYI TEHDİT EDİYORUZ
         let hafizaUyarisi = "";
         if (sessionState.lastSchedules) {
-            hafizaUyarisi = `\n[SİSTEM EMRİ - ÇOK ÖNEMLİ]: Sen bu müşteri için zaten seferleri çektin! İşte bulduğun seferler: ${sessionState.lastSchedules}. SAKIN 'checkBusSchedule' ALETİNİ TEKRAR ÇAĞIRMA! Müşteri saat seçtiyse direkt ismini al ve rezervasyon yap.`;
+            hafizaUyarisi = `\n[SİSTEM EMRİ - ÇOK ÖNEMLİ]: Sen daha önce şu seferleri çektin: ${sessionState.lastSchedules}. Eğer müşteri AYNI GÜZERGAH VE TARİH için sefer soruyorsa SAKIN 'checkBusSchedule' ALETİNİ TEKRAR ÇAĞIRMA, bu bilgiyi kullan! AMA müşteri YENİ BİR TARİH (örn: yarın olsun) veya FARKLI BİR GÜZERGAH sorarsa aleti SİKE SİKE TEKRAR ÇAĞIRIP YENİDEN SORGULA!`;
         }
 
         // Dinamik prompta uyarımızı ekliyoruz
@@ -110,7 +110,7 @@ async function generateResponse(systemPrompt, userMessage, history = [], session
                         functionArgs.cinsiyet // <-- YENİ EKLENDİ
                     );
                 }
-                
+
                 console.log(`[LLM-TOOL] Result from API:`, functionResult);
 
                 // API'den dönen veriyi OpenAI'a geri yediriyoruz

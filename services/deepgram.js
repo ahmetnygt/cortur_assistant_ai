@@ -31,7 +31,8 @@ function startDeepgramService(tenantId, streamSid, onTranscript, onSpeech) {
 
         if (transcript.trim() !== '') {
             // SÖZ KESME (BARGE-IN) YAKALAYICISI
-            if (!isFinal) {
+            // AHA BURASI: Sadece nefes alışını veya "e" demesini laf kesme sanmasın diye uzunluk şartı koyduk
+            if (!isFinal && transcript.trim().length > 3) {
                 if (!isInterrupted && onSpeech) {
                     isInterrupted = true; // Sesi bir kere kestik, cümleyi bitirene kadar bir daha tetikleme
                     onSpeech();
