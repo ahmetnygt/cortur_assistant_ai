@@ -10,6 +10,7 @@ const PARTNER_CODE = process.env.OBUS_PARTNER_CODE;
 let currentSession = { sessionId: null, deviceId: null };
 let cachedStations = null;
 let sessionLock = null; // AHA BURASI: Bizi ipten alacak Mutex (Kilit) değişkeni
+const journeyCache = new Map();
 
 async function getSession() {
     // Eğer kilit doluysa (zaten biri session almaya gittiyse), yeni istek atma, gidenin dönmesini bekle
@@ -148,49 +149,62 @@ async function checkBusSchedule(departureCity, destinationCity, date) {
         const res = await obusRequest('web/getjourneys', data);
 
         if (res && res.data && res.data.length > 0) {
-            const bosSeferler = res.data.filter(j => j['available-seat-count'] > 0).slice(0, 3);
+            // SLICE İPTAL! Tüm boş seferleri alıyoruz
+            const bosSeferler = res.data.filter(j => j['available-seat-count'] > 0);
 
             if (bosSeferler.length === 0) {
                 return `Maalesef ${date} tarihinde bu güzergah için seferlerimizin tamamı doludur.`;
             }
 
-            let seferDetaylari = [];
+            // DİKKAT: 20 sefere tek tek await atarsan müşteri yaşlanır. 
+            // Hepsine aynı anda dalmak için Promise.all kullanıyoruz!
+            const seferDetaylariHam = await Promise.all(bosSeferler.map(async (j) => {
+                try {
+                    // API'den gelen koca JSON objesini doğrudan RAM'e çakıyoruz
+                    journeyCache.set(j.id, j);
 
-            // AHA BURASI: Seferleri bulur bulmaz içine girip peşin peşin boş koltuk arıyoruz
-            for (const j of bosSeferler) {
-                const seatsRes = await obusRequest('web/getjourneyseats', j.id);
-                let selectedSeat = null;
+                    const seatsRes = await obusRequest('web/getjourneyseats', j.id);
+                    let selectedSeat = null;
 
-                if (seatsRes && seatsRes.data && seatsRes.data.seats && seatsRes.data.seats.cells) {
-                    const available = seatsRes.data.seats.cells.filter(c =>
-                        (c.type === 'Available' || c.type === 'AvailableM') && c.seat > 0
-                    );
-                    if (available.length > 0) {
-                        selectedSeat = available[0].seat;
+                    if (seatsRes && seatsRes.data && seatsRes.data.seats && seatsRes.data.seats.cells) {
+                        const available = seatsRes.data.seats.cells.filter(c =>
+                            (c.type === 'Available' || c.type === 'AvailableM') && c.seat > 0
+                        );
+                        if (available.length > 0) {
+                            selectedSeat = available[0].seat;
+                        }
                     }
-                }
 
-                // Sadece gerçekten cinsiyete uygun boş koltuğu olan seferleri listeye ekliyoruz
-                if (selectedSeat) {
-                    const originStop = j.route.find(r => r.id === originId) || j.route[0];
-                    let saat = "Bilinmiyor";
-                    if (originStop && originStop.time) {
-                        saat = new Date(originStop.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                    if (selectedSeat) {
+                        const originStop = j.route.find(r => r.id === originId) || j.route[0];
+                        let saat = "Bilinmiyor";
+                        if (originStop && originStop.time) {
+                            saat = new Date(originStop.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                        }
+                        const fiyat = j.price ? (j.price.internet || j.price.original) : "Bilinmiyor";
+
+                        // LLM'in midesini bulandırmamak için SADECE temel bilgiyi dönüyoruz
+                        return `Saat: ${saat}, Fiyat: ${fiyat} TL, Sefer_ID: ${j.id}, Koltuk_No: ${selectedSeat}`;
                     }
-                    const fiyat = j.price ? (j.price.internet || j.price.original) : "Bilinmiyor";
-
-                    seferDetaylari.push(`Saat: ${saat}, Fiyat: ${fiyat} TL, Sefer_ID: ${j.id}, Koltuk_No: ${selectedSeat}`);
+                } catch (error) {
+                    return null;
                 }
-            }
+                return null;
+            }));
+
+            // Null olanları (koltuk bulamadıklarımızı veya patlayanları) listeden söküp atıyoruz
+            const seferDetaylari = seferDetaylariHam.filter(Boolean);
 
             if (seferDetaylari.length === 0) {
                 return `Maalesef ${date} tarihinde uygun boş koltuk kalmamıştır.`;
             }
 
-            return `Şu seferleri buldum: ${seferDetaylari.join(" | ")}. Müşteriye SADECE SAATLERİ oku (Fiyatı müşteri özel olarak sormadıkça ASLA söyleme). 'Sefer_ID' ve 'Koltuk_No' değerlerini KESİNLİKLE müşteriye SÖYLEME! Hafızanda tut. Robot gibi liste yapma, insanı günlük konuşma dili kullan.`;
+            // Yapay zekaya tüm listeyi verip aklını kullanmasını emrediyoruz
+            return `Şu seferleri buldum: ${seferDetaylari.join(" | ")}.BİLGİ: Sana liste olarak verilen bu saatlere bak.Düzenli bir aralık varsa(örn: her saat başı) özetle.Düzensizse 3 - 4 tanesini say. 'Sefer_ID' ve 'Koltuk_No' değerlerini müşteriye ASLA SÖYLEME! Eğer müşteri güzergah, varış saati veya araç özellikleri hakkında detay sorarsa "getJourneyDetails" aracını kullan.`;
         } else {
             return `Maalesef ${date} tarihinde bu güzergah için boş seferimiz yok.`;
         }
+
     } catch (error) {
         console.error("[API ERROR] Sefer çekerken sıçtık:", error.message);
         return "Şu anda ana bilgisayara bağlanamıyorum, seferleri göremiyorum.";
@@ -202,7 +216,7 @@ async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone,
         // Obüs 'true' (Erkek), 'false' (Kadın) ister. Buse 'E' veya 'K' gönderiyor.
         const isMale = (cinsiyet === "K") ? false : true;
 
-        console.log(`[API] REZERVASYON: ${journeyId} | Koltuk: ${koltukNo} | Fiyat: ${fiyat} | Yolcu: ${name} ${surname} - Cinsiyet: ${isMale ? "Erkek" : "Kadın"}`);
+        console.log(`[API] REZERVASYON: ${journeyId} | Koltuk: ${koltukNo} | Fiyat: ${fiyat} | Yolcu: ${name} ${surname} - Cinsiyet: ${isMale ? "Erkek" : "Kadın"} `);
 
         const preparePassengers = [{
             "gender": isMale, // <-- DEĞİŞTİ
@@ -210,7 +224,7 @@ async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone,
             "price": parseFloat(fiyat), // <-- SIFIR YERİNE GERÇEK FİYAT
             "name": name,
             "surname": surname,
-            "full-name": `${name} ${surname}`
+            "full-name": `${name} ${surname} `
         }];
 
         const prepRes = await obusRequest('web/PrepareOrder', { "journey-id": journeyId, "passengers": preparePassengers });
@@ -219,7 +233,7 @@ async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone,
         // AHA BURASI: Sadece "success" false gelirse hata ver diyoruz
         if (!prepRes || prepRes.success === false || !prepRes.data) {
             const hataMesaji = prepRes ? (prepRes['user-message'] || prepRes.message) : 'Bilinmiyor';
-            return `Sistem şu an bu sefere bilet kesemiyor. API Hatası: ${hataMesaji}. Müşteriden özür dile.`;
+            return `Sistem şu an bu sefere bilet kesemiyor.API Hatası: ${hataMesaji}. Müşteriden özür dile.`;
         }
 
         // Dedektiflik yapıp sipariş kodunu buluyoruz (bazen pos-order içinde, bazen direkt order-code olarak gelir)
@@ -245,7 +259,7 @@ async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone,
             "id": passengerId,
             "first-name": name,
             "last-name": surname,
-            "full-name": `${name} ${surname}`,
+            "full-name": `${name} ${surname} `,
             "email": "bilet@cortur.com",
             "phone": phone,
             "gender": isMale,
@@ -269,7 +283,7 @@ async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone,
         // AHA 2. DÜZELTME: İkinci adımda (Reservation) hata çıkarsa Buse'yi uyarıyoruz, yalan söylemesini engelliyoruz
         if (!resRes || resRes.success === false) {
             const hataMesaji = resRes ? (resRes['user-message'] || resRes.message) : 'Bilinmeyen hata';
-            return `Sistem ikinci aşamada (Satın Alma) hata verdi. API Hatası: ${hataMesaji}. Müşteriden özür dile.`;
+            return `Sistem ikinci aşamada(Satın Alma) hata verdi.API Hatası: ${hataMesaji}. Müşteriden özür dile.`;
         }
 
         const pnr = (resRes.data && resRes.data.pnr) ? resRes.data.pnr : orderCode;
@@ -281,4 +295,24 @@ async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone,
     }
 }
 
-module.exports = { checkBusSchedule, makeReservation };
+async function getJourneyDetails(journeyId) {
+    const j = journeyCache.get(journeyId);
+
+    if (!j) {
+        return "Sistemde bu seferin detayları şu an bulunamıyor, müşteriden özür dile.";
+    }
+
+    // Güzergahı saatleriyle beraber cillop gibi bir stringe çeviriyoruz
+    const guzergah = j.route.map(r => {
+        const time = r.time ? new Date(r.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '';
+        return `${r.name || r['station-name'] || r.Name} (${time})`;
+    }).filter(Boolean).join(" -> ");
+
+    const busType = j.bus ? j.bus.type : "Standart";
+    const features = j.features ? Object.values(j.features).join(", ") : "Belirtilmemiş";
+
+    return `Seferin Güzergahı ve Tahmini Varış Saatleri: [${guzergah}]. Araç Tipi: ${busType}. Özellikler: ${features}. Bu verileri kullanarak müşterinin sorusuna kısa ve doğal bir cevap ver. Tüm durakları robot gibi sayma, sadece sorduğu durağı/detayı söyle.`;
+}
+
+// Module.exports'a eklemeyi unutma!
+module.exports = { checkBusSchedule, makeReservation, getJourneyDetails };

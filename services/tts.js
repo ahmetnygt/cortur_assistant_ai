@@ -4,7 +4,7 @@ const API_KEY = process.env.ELEVENLABS_API_KEY;
 /**
  * Metni ElevenLabs API'si ile sese çevirir ve anında Twilio WebSocket'i üzerinden akıtır (Stream).
  */
-async function streamTextToSpeech(text, streamSid, twilioWs) {
+async function streamTextToSpeech(text, streamSid, twilioWs, signal = null) { // <-- AHA BURASI! signal = null EKSİKTİ!
     console.log(`[TTS] ElevenLabs is streaming: "${text.substring(0, 30)}..."`);
     const startTime = Date.now();
 

@@ -1,5 +1,5 @@
 const OpenAI = require("openai");
-const { checkBusSchedule, makeReservation } = require('./api');
+const { checkBusSchedule, makeReservation, getJourneyDetails } = require('./api');
 
 // OpenAI'ı fişe takıyoruz
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -21,6 +21,20 @@ const tools = [
                 required: ["departureCity", "destinationCity", "date"],
             },
         },
+    },
+    {
+        type: "function",
+        function: {
+            name: "getJourneyDetails",
+            description: "Müşteri kendisine sunulan seferlerden biri için 'Kaçta varır?', 'Hangi duraklardan geçiyor?', 'Araç nasıl, wifi var mı?' gibi DETAY soruları sorarsa bu aracı çağır.",
+            parameters: {
+                type: "object",
+                properties: {
+                    sefer_id: { type: "string", description: "Detayı istenen seferin ID'si" }
+                },
+                required: ["sefer_id"],
+            },
+        }
     },
     {
         type: "function",
@@ -97,6 +111,9 @@ async function generateResponse(systemPrompt, userMessage, history = [], session
 
                     // AHA BURASI: API'den gelen sonucu RAM'e (sessionState) çakıyoruz!
                     sessionState.lastSchedules = functionResult;
+                    
+                } else if (functionName === "getJourneyDetails") {
+                    functionResult = await getJourneyDetails(functionArgs.sefer_id);
 
                 } else if (functionName === "makeReservation") {
                     functionResult = await makeReservation(
