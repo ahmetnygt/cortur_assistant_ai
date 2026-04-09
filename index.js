@@ -27,22 +27,20 @@ Format: Telefon görüşmesinde olduğun için yanıtların her zaman KISA, NET 
 
 # VERİ İŞLEME KURALLARI (STT DÜZELTMELERİ)
 - Şehir Eşleştirme: Müşteriden gelen bozuk veya şiveli şehir isimlerini şu geçerli lokasyonlara göre algıla ve eşleştir: [Çanakkale, İstanbul, Kadıköy, Pendik, Sarıyer, Silivri, Beylikdüzü, Gebze, Tekirdağ, Çorlu, Yalova, Bursa, Gemlik, Adana, Eskişehir, Gelibolu, Lapseki].
-- TC Kimlik Algılama: Müşteriler TC kimlik numaralarını yazıyla (örn: "yüz doksan iki") veya boşluklu gruplar halinde söyleyebilir. Müşteriden numarayı "tek tek okumasını" İSTEME. Gelen metni kendi zihninde birleştir, boşlukları sil ve geçerli 11 haneli bir sayıya çevir.
 
 # GÖREV AKIŞI
 Aşağıdaki adımları sırayla, her mesajda yalnızca bir adım ilerleyerek uygula:
 
-[ADIM 1: SORGULAMA]
-Müşteriden KALKIŞ, VARIŞ ve TARİH (Bugün/Yarın) bilgilerini al. Bilgiler tamsa anında 'checkBusSchedule' aracını çalıştır.
-
 [ADIM 2: BİLGİ TOPLAMA]
-Müşteri seferi seçtiğinde, bilet kesmek için gereken bilgileri TEK TEK sor. Hepsini aynı anda isteme.
-1. Sadece "İşleminiz için adınızı ve soyadınızı alabilir miyim?" de ve bekle.
+Müşteri seferi seçtiğinde, bilet kesmek için gereken bilgileri TEK TEK sor.
+1. Sadece "İşleminiz için adınızı ve soyadınızı alabilir miyim?" de ve bekle. (İsminden cinsiyetini anladıysan sormadan kaydet, eğer 'Deniz' gibi üniseks bir isimse "Yolcu beyefendi mi, hanımefendi mi?" diye teyit et).
 2. Ad soyad gelince, sadece "Teşekkürler, cep telefonu numaranızı rica edebilir miyim?" de ve bekle.
-3. Telefon gelince, sadece "Son olarak, biletiniz için T.C. Kimlik numaranızı alabilir miyim?" de ve bekle.
 
 [ADIM 3: REZERVASYONU TAMAMLAMA]
-Müşteri Ad, Soyad, Telefon ve 11 Haneli TC bilgisini eksiksiz verdiği an, "İşleminizi yapıyorum, lütfen bekleyin" gibi hiçbir laf kalabalığı yapmadan DOĞRUDAN 'makeReservation' aracını çalıştır.`}
+Müşteri Ad, Soyad, Telefon ve CİNSİYET bilgisini eksiksiz verdiği an, "İşleminizi yapıyorum, lütfen bekleyin" gibi hiçbir laf kalabalığı yapmadan DOĞRUDAN 'makeReservation' aracını çalıştır.
+
+[ADIM 3: REZERVASYONU TAMAMLAMA]
+Müşteri Ad, Soyad ve Telefon bilgisini eksiksiz verdiği an, "İşleminizi yapıyorum, lütfen bekleyin" gibi hiçbir laf kalabalığı yapmadan DOĞRUDAN 'makeReservation' aracını çalıştır.`}
 };
 
 app.post('/incoming', (req, res) => {
@@ -104,24 +102,24 @@ app.ws('/ses-akisi', (ws, req) => {
 
             console.log(`[WS] Stream started. Tenant: ${tenantId}`);
 
-            dgConnection = startDeepgramService(tenantId, streamSid, async (transcript) => {
-                if (isSpeaking) return;
-
-                isSpeaking = true;
-
-                // sessionState'i de fonksiyona yolluyoruz ki LLM içine yazıp çizebilsin
-                const answer = await generateResponse(currentTenant.prompt, transcript, callHistory, sessionState);
-
-                // AHA BURASI: Buse'nin tam lafını terminale basıyoruz
-                console.log(`\n🤖 [BUSE - ${tenantId}]: ${answer}\n`);
-
-                callHistory.push({ role: "user", content: transcript });
-                callHistory.push({ role: "assistant", content: answer });
-
-                await streamTextToSpeech(answer, streamSid, ws);
-
-                isSpeaking = false;
-            });
+            dgConnection = startDeepgramService(tenantId, streamSid,
+                async (transcript) => {
+                    if (isSpeaking) return;
+                    isSpeaking = true;
+                    const answer = await generateResponse(currentTenant.prompt, transcript, callHistory, sessionState);
+                    console.log(`\n🤖 [BUSE - ${tenantId}]: ${answer}\n`);
+                    callHistory.push({ role: "user", content: transcript });
+                    callHistory.push({ role: "assistant", content: answer });
+                    await streamTextToSpeech(answer, streamSid, ws);
+                    isSpeaking = false;
+                },
+                // AHA BURASI: SÖZ KESME (Susturucu)
+                () => {
+                    // Twilio'ya "Şu an çaldığın sesi anında kes ve çöpe at" diyoruz
+                    ws.send(JSON.stringify({ event: "clear", streamSid: streamSid }));
+                    console.log(`\n🛑 [SİSTEM]: Müşteri lafa daldı, Buse'nin sesi anında kesildi!`);
+                }
+            );
 
             // AHA BURASI: Buse'nin telefonu açar açmaz sabit metinle konuşmasını sağlayan tetikleyici
             setTimeout(async () => {

@@ -26,7 +26,7 @@ const tools = [
         type: "function",
         function: {
             name: "makeReservation",
-            description: "Müşteri ad, soyad, telefon ve T.C. Kimlik numarasını eksiksiz verdiğinde, KESİNLİKLE MÜŞTERİDEN ONAY BEKLEMEDEN VE 'YAPIYORUM' DİYE CEVAP YAZMADAN DİREKT BU ALETİ ÇAĞIR! Aleti çağırmak için müşterinin 'tamam yap' demesini bekleme.",
+            description: "Müşteri ad, soyad ve telefon numarasını eksiksiz verdiğinde, KESİNLİKLE MÜŞTERİDEN ONAY BEKLEMEDEN VE 'YAPIYORUM' DİYE CEVAP YAZMADAN DİREKT BU ALETİ ÇAĞIR! Aleti çağırmak için müşterinin 'tamam yap' demesini bekleme.",
             parameters: {
                 type: "object",
                 properties: {
@@ -36,9 +36,9 @@ const tools = [
                     name: { type: "string", description: "Yolcunun adı" },
                     surname: { type: "string", description: "Yolcunun soyadı" },
                     phone: { type: "string", description: "Yolcunun telefonu" },
-                    tc_kimlik: { type: "string", description: "Yolcunun 11 haneli T.C. Kimlik Numarası" } // <-- YENİ EKLENDİ
+                    cinsiyet: { type: "string", description: "Yolcu Erkek ise 'E', Kadın ise 'K' yaz." } // <-- EKLENDİ
                 },
-                required: ["sefer_id", "koltuk_no", "fiyat", "name", "surname", "phone", "tc_kimlik"], // <-- ZORUNLU KILINDI
+                required: ["sefer_id", "koltuk_no", "fiyat", "name", "surname", "phone", "cinsiyet"],
             },
         }
     }
@@ -106,10 +106,11 @@ async function generateResponse(systemPrompt, userMessage, history = [], session
                         functionArgs.name,
                         functionArgs.surname,
                         functionArgs.phone,
-                        functionArgs.tc_kimlik // <-- YENİ EKLENDİ
+                        null, // govId (TC) null kalmıştı hatırlarsan
+                        functionArgs.cinsiyet // <-- YENİ EKLENDİ
                     );
                 }
-
+                
                 console.log(`[LLM-TOOL] Result from API:`, functionResult);
 
                 // API'den dönen veriyi OpenAI'a geri yediriyoruz

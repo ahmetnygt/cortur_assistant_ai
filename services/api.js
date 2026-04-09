@@ -178,12 +178,15 @@ async function checkBusSchedule(departureCity, destinationCity, date) {
     }
 }
 
-async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone, govId) {
+async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone, govId, cinsiyet) { // <-- cinsiyet eklendi
     try {
-        console.log(`[API] REZERVASYON BAŞLIYOR: Journey: ${journeyId} | Koltuk: ${koltukNo} | Fiyat: ${fiyat} | Yolcu: ${name} ${surname} - ${phone} - TC: ${govId}`);
+        // Obüs 'true' (Erkek), 'false' (Kadın) ister. Buse 'E' veya 'K' gönderiyor.
+        const isMale = (cinsiyet === "K") ? false : true;
+
+        console.log(`[API] REZERVASYON: ${journeyId} | Koltuk: ${koltukNo} | Fiyat: ${fiyat} | Yolcu: ${name} ${surname} - Cinsiyet: ${isMale ? "Erkek" : "Kadın"}`);
 
         const preparePassengers = [{
-            "gender": true,
+            "gender": isMale, // <-- DEĞİŞTİ
             "seat-number": parseInt(koltukNo),
             "price": parseFloat(fiyat), // <-- SIFIR YERİNE GERÇEK FİYAT
             "name": name,
@@ -226,7 +229,7 @@ async function makeReservation(journeyId, koltukNo, fiyat, name, surname, phone,
             "full-name": `${name} ${surname}`,
             "email": "bilet@cortur.com",
             "phone": phone,
-            "gender": true,
+            "gender": isMale,
             "pnr-code": null,
             "price": parseFloat(fiyat),
             "nationality": "TR",
