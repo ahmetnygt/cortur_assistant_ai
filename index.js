@@ -87,7 +87,8 @@ app.ws('/ses-akisi', (ws, req) => {
     let dgConnection = null;
     let isSpeaking = false;
     let callHistory = [];
-    let sessionState = { lastSchedules: null }; // AHA! RAM HAFIZAMIZ BURADA BAŞLIYOR
+    let sessionState = { lastSchedules: null };
+    let currentAbortController = null; // AHA BURASI: OpenAI'ın celladı
 
     ws.on('message', async (message) => {
         const msg = JSON.parse(message);
@@ -100,21 +101,47 @@ app.ws('/ses-akisi', (ws, req) => {
             console.log(`[WS] Stream started. Tenant: ${tenantId}`);
 
             dgConnection = startDeepgramService(tenantId, streamSid,
+                // Müşteri lafını BİTİRDİĞİNDE çalışacak yer (onTranscript)
                 async (transcript) => {
                     if (isSpeaking) return;
                     isSpeaking = true;
-                    const answer = await generateResponse(currentTenant.prompt, transcript, callHistory, sessionState);
+
+                    // Yeni bir istek için yeni bir kılıç çekiyoruz
+                    currentAbortController = new AbortController();
+
+                    // Sinyali LLM'e yolluyoruz
+                    const answer = await generateResponse(
+                        currentTenant.prompt,
+                        transcript,
+                        callHistory,
+                        sessionState,
+                        currentAbortController.signal
+                    );
+
+                    // Eğer LLM null dönerse demek ki adam araya girdi ve biz isteği geberttik.
+                    // İşlemi burada bırak, TTS'e geçme.
+                    if (!answer) {
+                        isSpeaking = false;
+                        return;
+                    }
+
                     console.log(`\n🤖 [BUSE - ${tenantId}]: ${answer}\n`);
                     callHistory.push({ role: "user", content: transcript });
                     callHistory.push({ role: "assistant", content: answer });
                     await streamTextToSpeech(answer, streamSid, ws);
                     isSpeaking = false;
                 },
-                // AHA BURASI: SÖZ KESME (Susturucu)
+                // Müşteri lafa GİRDİĞİ AN çalışacak yer (onSpeech - Susturucu)
                 () => {
-                    // Twilio'ya "Şu an çaldığın sesi anında kes ve çöpe at" diyoruz
+                    // Twilio'ya "Sesini kes" diyoruz
                     ws.send(JSON.stringify({ event: "clear", streamSid: streamSid }));
-                    console.log(`\n🛑 [SİSTEM]: Müşteri lafa daldı, Buse'nin sesi anında kesildi!`);
+                    console.log(`\n🛑 [SİSTEM]: Müşteri lafa daldı, Twilio sesi anında kesildi!`);
+
+                    // Eğer arkada dönen bir OpenAI isteği varsa anında kafasına sıkıyoruz
+                    if (currentAbortController) {
+                        currentAbortController.abort();
+                        currentAbortController = null;
+                    }
                 }
             );
 

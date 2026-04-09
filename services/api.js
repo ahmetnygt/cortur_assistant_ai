@@ -9,30 +9,44 @@ const PARTNER_CODE = process.env.OBUS_PARTNER_CODE;
 
 let currentSession = { sessionId: null, deviceId: null };
 let cachedStations = null;
+let sessionLock = null; // AHA BURASI: Bizi ipten alacak Mutex (Kilit) değişkeni
 
 async function getSession() {
-    try {
-        const payload = {
-            type: 1,
-            connection: { "ip-address": IP_ADDRESS, "port": PORT },
-            browser: { name: "Chrome" }
-        };
-
-        const res = await axios.post(`${API_BASE}/client/getsession`, payload, {
-            headers: { 'Content-Type': 'application/json', 'Authorization': BASIC_AUTH }
-        });
-
-        if (res.data && res.data.data) {
-            currentSession.sessionId = res.data.data['session-id'];
-            currentSession.deviceId = res.data.data['device-id'];
-            console.log("✅ [API] oBus Session cillop gibi alındı.");
-            return true;
-        }
-        return false;
-    } catch (err) {
-        console.error(`❌ [API] Session alırken sıçtık: ${err.message}`);
-        return false;
+    // Eğer kilit doluysa (zaten biri session almaya gittiyse), yeni istek atma, gidenin dönmesini bekle
+    if (sessionLock) {
+        console.log("⏳ [API] Başka bir çağrı session alıyor, kuyrukta bekleniyor...");
+        return await sessionLock;
     }
+
+    // Kimse gitmediyse kilidi kendimiz oluşturup API'ye gidiyoruz
+    sessionLock = (async () => {
+        try {
+            const payload = {
+                type: 1,
+                connection: { "ip-address": IP_ADDRESS, "port": PORT },
+                browser: { name: "Chrome" }
+            };
+
+            const res = await axios.post(`${API_BASE}/client/getsession`, payload, {
+                headers: { 'Content-Type': 'application/json', 'Authorization': BASIC_AUTH }
+            });
+
+            if (res.data && res.data.data) {
+                currentSession.sessionId = res.data.data['session-id'];
+                currentSession.deviceId = res.data.data['device-id'];
+                console.log("✅ [API] oBus Session cillop gibi alındı ve kilit açıldı.");
+                return true;
+            }
+            return false;
+        } catch (err) {
+            console.error(`❌ [API] Session alırken sıçtık: ${err.message}`);
+            return false;
+        } finally {
+            sessionLock = null; // İş bitince kilidi kaldır ki sonradan gelenler girebilsin
+        }
+    })();
+
+    return await sessionLock;
 }
 
 async function obusRequest(endpoint, data = null, isRetry = false) {
@@ -55,7 +69,10 @@ async function obusRequest(endpoint, data = null, isRetry = false) {
 
         if (res.data && (res.data.status === 'InvalidSession' || res.data.status === 'Error') && !isRetry) {
             console.log("⚠️ [API] Obüs session geçersiz dedi, sike sike baştan alıyoruz...");
-            currentSession.sessionId = null;
+            // Eğer zaten başka bir işlem kilidi koyup yenilemeye başlamadıysa biz sıfırlayalım
+            if (!sessionLock) {
+                currentSession.sessionId = null;
+            }
             await getSession();
             return await obusRequest(endpoint, data, true);
         }
@@ -65,11 +82,13 @@ async function obusRequest(endpoint, data = null, isRetry = false) {
         const isAuthError = err.response && (err.response.status === 401 || err.response.status === 403 || err.response.status === 400);
         if (isAuthError && !isRetry) {
             console.log("⚠️ [API] Token/Session bayatlamış, yenilenip tekrar deneniyor...");
-            currentSession.sessionId = null;
+            if (!sessionLock) {
+                currentSession.sessionId = null;
+            }
             await getSession();
             return await obusRequest(endpoint, data, true);
         }
-        // BURASI DEĞİŞTİ: Axios patlarsa sunucunun döndüğü asıl hatayı basacak
+
         console.error(`🔥 [API] ${endpoint} isteği fena gümledi:`, err.response ? JSON.stringify(err.response.data, null, 2) : err.message);
         throw err;
     }

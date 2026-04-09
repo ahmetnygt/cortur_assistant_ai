@@ -44,20 +44,17 @@ const tools = [
     }
 ];
 
-async function generateResponse(systemPrompt, userMessage, history = [], sessionState = {}) {
+async function generateResponse(systemPrompt, userMessage, history = [], sessionState = {}, signal = null) {
     try {
         console.log(`[LLM] GPT-4o-mini is thinking...`);
         const startTime = Date.now();
 
         const todayDate = new Date().toISOString().split('T')[0];
-
-        // EĞER RAM'DE SEFER VARSA YAPAY ZEKAYI TEHDİT EDİYORUZ
         let hafizaUyarisi = "";
         if (sessionState.lastSchedules) {
-            hafizaUyarisi = `\n[SİSTEM EMRİ - ÇOK ÖNEMLİ]: Sen daha önce şu seferleri çektin: ${sessionState.lastSchedules}. Eğer müşteri AYNI GÜZERGAH VE TARİH için sefer soruyorsa SAKIN 'checkBusSchedule' ALETİNİ TEKRAR ÇAĞIRMA, bu bilgiyi kullan! AMA müşteri YENİ BİR TARİH (örn: yarın olsun) veya FARKLI BİR GÜZERGAH sorarsa aleti SİKE SİKE TEKRAR ÇAĞIRIP YENİDEN SORGULA!`;
+            hafizaUyarisi = `\n[SİSTEM EMRİ - ÇOK ÖNEMLİ]: Sen daha önce şu seferleri çektin: ${sessionState.lastSchedules}. Eğer müşteri AYNI GÜZERGAH VE TARİH için sefer soruyorsa SAKIN 'checkBusSchedule' ALETİNİ TEKRAR ÇAĞIRMA...`;
         }
 
-        // Dinamik prompta uyarımızı ekliyoruz
         const dynamicPrompt = `${systemPrompt}\nÖNEMLİ BİLGİ: Bugünün tarihi ${todayDate}. ${hafizaUyarisi}`;
 
         const messages = [
@@ -66,13 +63,16 @@ async function generateResponse(systemPrompt, userMessage, history = [], session
             { role: "user", content: userMessage }
         ];
 
+        // İptal sinyalini OpenAI'a gönderilecek seçeneklere (options) ekliyoruz
+        const options = signal ? { signal } : {};
+
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             temperature: 0.2,
             messages: messages,
             tools: tools,
             tool_choice: "auto"
-        });
+        }, options); // <-- AHA BURASI! Fişi buraya bağladık
 
         const responseMessage = response.choices[0].message;
 
@@ -125,22 +125,25 @@ async function generateResponse(systemPrompt, userMessage, history = [], session
             // AHA RÖNTGEN CİHAZINI BURAYA TAKTIK: Buse'nin beynine tam olarak ne girdiğini ekrana kusuyoruz
             console.log(`\n🧠 [BUSE'NİN BEYNİNE GİREN HAM DATA]:\n--------------------------------------------------\n${messages[messages.length - 1].content}\n--------------------------------------------------\n`);
 
-            // 2. İSTEK: API sonucunu gören OpenAI'a "Bunu adama düzgünce oku" diyoruz
             console.log(`[LLM] Asking GPT to summarize the API result...`);
             const secondResponse = await openai.chat.completions.create({
                 model: "gpt-4o-mini",
                 temperature: 0.2,
                 messages: messages
-            });
+            }, options); // <-- İkinci isteğe de aynı fişi bağlıyoruz
 
-            console.log(`[LLM] Final tool-based response generated in ${Date.now() - startTime}ms.`);
             return secondResponse.choices[0].message.content;
         }
 
-        console.log(`[LLM] Standard response generated in ${Date.now() - startTime}ms.`);
         return responseMessage.content;
 
     } catch (error) {
+        // İptal edildiğinde hata fırlatır, bunu yakalayıp sessizce bitirmemiz lazım
+        if (error.name === 'AbortError') {
+            console.log("🛑 [LLM] Adam lafa daldı, OpenAI isteği siktir edildi (Tokenler cepte kaldı).");
+            return null; // Yarıda kesildiğini belirtmek için null dönüyoruz
+        }
+
         console.error(`[LLM ERROR]`, error);
         return "Sistemde anlık bir yoğunluk var, lütfen tekrar söyler misiniz?";
     }
