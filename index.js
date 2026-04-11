@@ -1,45 +1,7 @@
-const prompt = `
-Sen Çortur Seyahat'in sesli müşteri temsilcisi Buse'sin. Gerçek bir telefon görüşmesindesin ve müşterilere otobüs seferi sorgulama, bilet rezervasyonu konularında yardımcı oluyorsun.
-
-KARAKTERİN VE ÜSLUBUN:
-- Empatik, sabırlı, çok doğal konuşan, profesyonel ama samimi bir insansın. 
-- Karşındaki kişi seninle telefonda konuşuyor. Cümlelerini "Tamamdır", "Anlıyorum", "Harika", "Hemen kontrol ediyorum" gibi doğal tepkilerle süsle.
-- Asla bir yapay zeka veya robot olduğunu hissettirme. "Sistem, veritabanı, api, entegrasyon" gibi teknik kelimeler kullanma.
-
-SESLENDİRME (TTS) VE FORMAT KURALLARI:
-- Yanıtların daima kısa, bir veya iki cümle uzunluğunda ve GÜNLÜK KONUŞMA dilinde olmalıdır.
-- Kesinlikle madde imi (bullet point), kalın yazı, yıldız, diyez veya alt tire kullanma. Seslendirme motoru bunları okuyamaz.
-- Liste yapma, düz akıcı cümleler kur. Sayıları veya saatleri okunuşuyla yaz (Örn: "15 30" veya "saat 3 buçuk").
-- Müşteri bir bilgiyi eksik verirse hepsini aynı anda sorma. Tek tek, adım adım ilerle.
-
-ÖNEMLİ VERİ KURALLARI:
-1. Geçerli Şehirler: [Çanakkale, İstanbul, Kadıköy, Pendik, Sarıyer, Silivri, Beylikdüzü, Gebze, Tekirdağ, Çorlu, Yalova, Bursa, Gemlik, Adana, Eskişehir, Gelibolu, Lapseki]. Müşteri şiveli veya yanlış telaffuz etse bile bu listedekilerden en yakın olanı anla. Listede olmayan bir yer sorarsa, kibarca oraya seferiniz olmadığını söyle.
-2. Cinsiyet Tahmini: Rezervasyon için müşterinin adından cinsiyetini SEN tahmin et (Ahmet=Erkek, Ayşe=Kadın). Üniseks isimlerde mantıklı birini seç ama KESİNLİKLE müşteriye cinsiyetini sorma.
-3. Gizli Bilgiler: Araçlardan (tools) gelen "Sefer_ID", "Koltuk_No" gibi kodları sadece arka planda kullan, asla müşteriye sesli olarak okuma. Müşteriye sadece sefer saatlerini ve işlem bitince PNR kodunu oku. Fiyatı ise müşteri özellikle sormazsa söyleme.
-
-GÖREV AKIŞI:
-Aşağıdaki adımları sırasıyla uygula:
-
-ADIM 1: SEFER SORGULAMA VE DETAYLAR
-Müşteri nereden nereye ve ne zaman gideceğini söylediğinde "checkBusSchedule" aracını çalıştır. Tarih veya güzergah eksikse sor, cevap geldiğinde "checkBusSchedule" aracını çalıştır. 
-Araçtan sana dönen sefer saatlerini İYİCE İNCELE:
-- Eğer çok sefer varsa ve düzenli bir patern varsa (örn: 10:00, 11:00, 12:00) saatleri tek tek sayma! Müşteriye "Her saat başı seferimiz var, hangi saatler size uyar?" gibi özetle.
-- Düzensiz çok sefer varsa sadece en uygun/yakın 3-4 tanesini oku ve "Diğer saatlerde de seferlerimiz mevcut" de. Asla 4'ten fazla saati peş peşe sayıp müşterinin kafasını şişirme.
-Aracı çalıştırırken KESİNLİKLE "İşleminizi yapıyorum, lütfen bekleyin" gibi sözlü cevaplar verme; doğrudan ve tamamen SESSİZCE aracı tetikle!
-- Detay Soruları: Müşteri bir seferi seçip "Ne kadar sürer, kaçta orada olurum, güzergah nedir, araçta wifi var mı?" gibi sorular sorarsa KESİNLİKLE "getJourneyDetails" aracını çalıştır ve oradan gelen cevapla müşteriyi bilgilendir.
-
-ADIM 2: BİLGİ TOPLAMA VE REZERVASYON
-Müşteri bir seferi seçtiğinde, kaç kişi seyahat edeceklerini anla veya sor. Ardından rezervasyon için gerekenleri TEK TEK sor:
-- Önce: Seyahat edecek TÜM yolcuların isim ve soyisimlerini al. Eğer birden fazla kişiler ise, hepsinin ismini söylemesini bekle, hepsini söylemezse sor. Elinde tüm isimler olmadan işlem yapma.
-- Tüm isimler tamamlanınca: "Teşekkürler, son olarak iletişim için tek bir cep telefonu numarası rica edebilir miyim?" de ve telefon numarasını alında işlemi bitirme adımına geç.
-
-ADIM 3: İŞLEMİ BİTİRME
-Müşteri telefon numarasını verdiği an işlemi bitir. "makeReservation" aracını SESSİZCE ve DOĞRUDAN çalıştır (Yine "bekleyin" demek yok). Araca tüm yolcuların isimlerini ve o tek telefon numarasını ekle. İşlem başarılı olduğunda müşteriye ORTAK PNR kodunu ve koltuk numaralarını ileterek başka bir isteği olup olmadığını sor.`
-
 require('dotenv').config();
 const express = require('express');
 const ExpressWs = require('express-ws');
-const WebSocket = require('ws'); // OpenAI'a WebSocket ile bağlanmak için
+const WebSocket = require('ws');
 const { checkBusSchedule, makeReservation, getJourneyDetails } = require('./services/api');
 
 const app = express();
@@ -92,18 +54,18 @@ Müşteri bir seferi seçtiğinde, kaç kişi seyahat edeceklerini anla veya sor
 Müşteri telefon numarasını verdiği an işlemi bitir. "makeReservation" aracını SESSİZCE ve DOĞRUDAN çalıştır(Yine "bekleyin" demek yok).Araca tüm yolcuların isimlerini ve o tek telefonu ekle.İşlem başarılı olduğunda müşteriye ORTAK PNR kodunu ve koltuk numaralarını ileterek telefonu kapatmadan önce başka isteği var mı sor.
 `;
 
-// OpenAI Realtime API için Alet Çantası (Tools) Formati biraz farklıdır
+// Eski llm.js'den gelen DAHA DETAYLI alet çantası
 const tools = [
     {
         type: "function",
         name: "checkBusSchedule",
-        description: "Müşteri güzergah ve tarih sorduğunda seferleri bulmak için çağır.",
+        description: "Müşteri İLK DEFA bir güzergah ve tarih sorduğunda bu fonksiyonu çağır. Geçmiş konuşmada bu veriler varsa tekrar çağırma. Sadece seferleri listeler.",
         parameters: {
             type: "object",
             properties: {
                 departureCity: { type: "string" },
                 destinationCity: { type: "string" },
-                date: { type: "string", description: "YYYY-MM-DD formatında" }
+                date: { type: "string", description: "YYYY-MM-DD formatında tarih" }
             },
             required: ["departureCity", "destinationCity", "date"]
         }
@@ -111,7 +73,7 @@ const tools = [
     {
         type: "function",
         name: "getJourneyDetails",
-        description: "Müşteri seçtiği seferle ilgili 'ne kadar sürer', 'nereden geçer' derse çağır.",
+        description: "Müşteri 'Kaçta varır?', 'Hangi duraklardan geçiyor?', 'Araç nasıl?' gibi DETAY soruları sorarsa bu aracı çağır.",
         parameters: {
             type: "object",
             properties: {
@@ -123,7 +85,7 @@ const tools = [
     {
         type: "function",
         name: "makeReservation",
-        description: "Tüm isimler ve telefon alındığında rezervasyonu tamamlamak için çağır.",
+        description: "Müşteri, seyahat edecek TÜM YOLCULARIN ad/soyadını ve TEK BİR TELEFON numarasını verdiğinde rezervasyonu tamamlamak için çağır.",
         parameters: {
             type: "object",
             properties: {
@@ -137,7 +99,7 @@ const tools = [
                         properties: {
                             name: { type: "string" },
                             surname: { type: "string" },
-                            cinsiyet: { type: "string", description: "E veya K" }
+                            cinsiyet: { type: "string", description: "İsimden tahmin et: E veya K" }
                         },
                         required: ["name", "surname", "cinsiyet"]
                     }
@@ -156,11 +118,10 @@ const tenantConfig = {
 };
 
 app.post('/incoming', (req, res) => {
-    console.log("\n🚨 --- [TWILIO'DAN KAPIN ÇALINDI] --- 🚨");
     const calledNumber = req.body.To;
     const tenant = tenantConfig[calledNumber];
 
-    if (!tenant) return res.send(`<Response><Say>Adres eşleşmedi amk.</Say></Response>`);
+    if (!tenant) return res.send(`<Response><Say>Adres eşleşmedi.</Say></Response>`);
 
     const hostUrl = `https://${req.headers.host}`;
     const twiml = `
@@ -179,10 +140,7 @@ app.post('/incoming', (req, res) => {
 
 app.ws('/ses-akisi', (twilioWs, req) => {
     let streamSid = null;
-    let tenantId = null;
 
-    // AHA BURASI: OpenAI'ın Realtime API'sine doğrudan boru döşüyoruz
-    // Not: Model ismini senin fantezine göre gpt-5.4-mini-realtime veya çalışmazsa gpt-4o-mini-realtime-preview yaparsın.
     const OPENAI_MODEL = "gpt-4o-mini-realtime-preview-2024-12-17";
     const openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=${OPENAI_MODEL}`, {
         headers: {
@@ -191,18 +149,20 @@ app.ws('/ses-akisi', (twilioWs, req) => {
         }
     });
 
-    // OpenAI Bağlantısı açıldığında sistemi kuruyoruz
     openaiWs.on('open', () => {
         console.log("✅ [V2V] OpenAI Realtime API'ye bağlandık!");
 
-        // Buse'nin beynini (session) başlatıyoruz
+        // ESKİ KODDAKİ GİBİ TARİHİ DİNAMİK EKLİYORUZ (Aksi halde yarın dendiğinde sistem patlıyor)
+        const todayDate = new Date().toISOString().split('T')[0];
+        const dynamicPrompt = `${SYSTEM_PROMPT}\n\nÖNEMLİ BİLGİ: Bugünün tarihi ${todayDate}.`;
+
         const sessionUpdate = {
             type: "session.update",
             session: {
-                instructions: SYSTEM_PROMPT,
-                voice: "alloy", // OpenAI seslerinden biri (alloy, nova, shimmer vs.) İstediğini seç.
-                input_audio_format: "g711_ulaw", // Twilio'nun formatı!
-                output_audio_format: "g711_ulaw", // Twilio'ya dönecek format!
+                instructions: dynamicPrompt,
+                voice: "alloy",
+                input_audio_format: "g711_ulaw",
+                output_audio_format: "g711_ulaw",
                 tools: tools,
                 tool_choice: "auto",
                 temperature: 0.6
@@ -211,11 +171,9 @@ app.ws('/ses-akisi', (twilioWs, req) => {
         openaiWs.send(JSON.stringify(sessionUpdate));
     });
 
-    // OpenAI'dan bize (Twilio'ya) gelen cevaplar ve alet çağrıları
     openaiWs.on('message', async (data) => {
         const event = JSON.parse(data);
 
-        // OpenAI'dan gelen Sesi doğrudan Twilio hattına bas! (Sıfır Gecikme)
         if (event.type === 'response.audio.delta') {
             twilioWs.send(JSON.stringify({
                 event: 'media',
@@ -224,7 +182,7 @@ app.ws('/ses-akisi', (twilioWs, req) => {
             }));
         }
 
-        // Buse bir araç (Tool) çalıştırmak isterse
+        // TOOL ÇAĞIRMA İŞLEMİ (Buraya hata yakalama eklendi ki API patlarsa LLM haberdar olsun)
         if (event.type === 'response.function_call_arguments.done') {
             console.log(`\n🛠️ [V2V-TOOL] Buse ${event.name} aletini çağırıyor...`);
             const args = JSON.parse(event.arguments);
@@ -239,12 +197,12 @@ app.ws('/ses-akisi', (twilioWs, req) => {
                     result = await makeReservation(args.sefer_id, args.fiyat, args.passengers, args.phone);
                 }
             } catch (err) {
-                result = "Sistemde hata oluştu.";
+                console.error(`[API ERROR] Fonksiyon patladı:`, err.message);
+                result = "Şu an sunucuya bağlanılamıyor, işleminizi gerçekleştiremiyorum. Müşteriden özür dileyin.";
             }
 
             console.log(`[V2V-TOOL] Sonuç OpenAI'a geri gönderiliyor:`, result);
 
-            // Aletin sonucunu OpenAI'a iletiyoruz
             openaiWs.send(JSON.stringify({
                 type: "conversation.item.create",
                 item: {
@@ -254,51 +212,47 @@ app.ws('/ses-akisi', (twilioWs, req) => {
                 }
             }));
 
-            // Sonucu verdik, "Hadi şimdi bu sonuca göre konuş" diye tetikliyoruz
             openaiWs.send(JSON.stringify({ type: "response.create" }));
         }
 
-        // Müşteri araya girip laf keserse OpenAI'ın gönderdiği iptal sinyali
         if (event.type === 'response.interrupted' || event.type === 'input_audio_buffer.speech_started') {
-            console.log("🛑 [V2V] Müşteri lafa daldı, Buse anında sustu!");
             twilioWs.send(JSON.stringify({ event: "clear", streamSid: streamSid }));
         }
     });
 
-    // Twilio'dan bize (OpenAI'a) gelen müşteri sesi
     twilioWs.on('message', (message) => {
         const msg = JSON.parse(message);
 
         if (msg.event === 'start') {
             streamSid = msg.start.streamSid;
-            tenantId = msg.start.customParameters.tenantId;
-            console.log(`[WS] Twilio çağrısı başladı: ${tenantId}`);
+            console.log(`[WS] Twilio çağrısı başladı`);
 
-            // AHA BURASI: APTAL BEKLEME YERİNE AKILLI TETİKLEYİCİ
-            // AHA BURASI: APTAL BEKLEME YERİNE AKILLI TETİKLEYİCİ VE TEMİZ BAĞLAM
+            // İLK SELAMLAMA - Eski sabit selamlama mantığını Realtime'a uydurduk
             const ilkSelamiVer = () => {
                 if (openaiWs.readyState === WebSocket.OPEN) {
-                    console.log("🗣️ [V2V] Boru açık, sahte mesaj olmadan ilk selamlama tetikleniyor...");
-
-                    // User rolünde sahte mesaj atmak yerine, doğrudan cevap oluşturmasını
-                    // ve bu cevabı oluştururken tek seferlik şu emre uymasını istiyoruz:
                     openaiWs.send(JSON.stringify({
-                        type: "response.create",
-                        response: {
-                            instructions: "Şu an telefonu yeni açtın. Konuşmayı başlatmak için sadece şunu söyle: 'Çortur Seyahat'e hoş geldiniz, ben Buse. Size nasıl yardımcı olabilirim?'"
+                        type: "conversation.item.create",
+                        item: {
+                            type: "message",
+                            role: "assistant",
+                            content: [{ type: "text", text: "Çortur Seyahat'e hoş geldiniz, ben Buse. Size nasıl yardımcı olabilirim?" }]
                         }
                     }));
 
+                    openaiWs.send(JSON.stringify({
+                        type: "response.create",
+                        response: {
+                            instructions: "Sadece az önce sisteme eklediğim selamlama metnini sesli olarak oku ve sus."
+                        }
+                    }));
                 } else {
-                    console.log("⏳ [V2V] OpenAI henüz bağlanmadı, bekleniyor...");
-                    setTimeout(ilkSelamiVer, 250);
+                    setTimeout(ilkSelamiVer, 100);
                 }
             };
-
-            ilkSelamiVer(); // Tetikleyiciyi başlat
+            ilkSelamiVer();
         }
+
         if (msg.event === 'media') {
-            // Müşterinin sesini doğrudan OpenAI'ın boğazından aşağı döküyoruz!
             if (openaiWs.readyState === WebSocket.OPEN) {
                 openaiWs.send(JSON.stringify({
                     type: "input_audio_buffer.append",
@@ -308,7 +262,6 @@ app.ws('/ses-akisi', (twilioWs, req) => {
         }
 
         if (msg.event === 'stop') {
-            console.log(`[WS] Çağrı kapandı.`);
             if (openaiWs.readyState === WebSocket.OPEN) openaiWs.close();
         }
     });
